@@ -1,72 +1,80 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>OEM Supplier AI Research</title>
-  <link rel="stylesheet" href="styles.css" />
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OEM Supplier Research</title>
+  <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
-  <main>
-    <header>
-      <h1>OEM Supplier AI Research</h1>
-      <p>Static frontend-only supplier research for Chinese OEMs in Europe.</p>
+  <main class="page">
+    <header class="topbar">
+      <div>
+        <h1>OEM Supplier Research</h1>
+        <p>Simple AI research dashboard for Chinese OEM supplier intelligence in Europe.</p>
+      </div>
+      <div class="actions">
+        <button id="exportCsvBtn">Export CSV</button>
+        <button id="exportJsonBtn">Export JSON</button>
+        <button id="exportHtmlBtn">Export HTML</button>
+      </div>
     </header>
 
-    <section class="card">
-      <label>OpenAI API Key</label>
-      <input id="apiKey" type="password" placeholder="sk-..." />
-      <small>Your key stays in this browser. Do not hardcode it into GitHub or deploy with a saved key.</small>
+    <section class="panel">
+      <label for="apiKey">OpenAI API key</label>
+      <input id="apiKey" type="password" placeholder="sk-..." autocomplete="off" />
+      <div class="row small-row">
+        <label><input id="rememberKey" type="checkbox" /> Remember in this browser</label>
+        <button id="clearKeyBtn" class="secondary">Clear key</button>
+      </div>
+      <p class="hint">This version has no backend. Your key is used only in your browser. Do not share a public deployment with a saved key.</p>
     </section>
 
     <section class="layout">
-      <aside class="card side">
+      <aside class="panel sidebar">
         <h2>OEMs</h2>
-        <div id="oems" class="buttons vertical"></div>
-        <hr>
+        <div id="oemList" class="oem-list"></div>
+        <hr />
         <h3>Add OEM</h3>
         <input id="newOemName" placeholder="OEM name" />
+        <input id="newOemCountry" placeholder="Country / group" />
         <button id="addOemBtn">Add OEM</button>
       </aside>
 
-      <section class="card maincard">
-        <div class="row between">
+      <section class="panel main-panel">
+        <div class="section-head">
           <div>
-            <h2 id="selectedTitle">Results</h2>
-            <p>Supplier intelligence for the selected OEM only.</p>
+            <h2 id="selectedOemTitle">Select an OEM</h2>
+            <p id="selectedOemSubtitle" class="muted"></p>
           </div>
           <button id="researchBtn">Research selected OEM</button>
         </div>
+
+        <div id="statusBox" class="status" hidden></div>
+
         <div class="toolbar">
-          <button id="copyPromptBtn" class="secondary">Copy research prompt</button>
-          <button id="exportCsvBtn">Export CSV</button>
-          <button id="exportJsonBtn">Export JSON</button>
-          <button id="exportHtmlBtn">Export HTML</button>
-          <button id="clearBtn" class="secondary">Clear OEM data</button>
-        </div>
-        <div id="status"></div>
-        <div class="toolbar">
-          <input id="searchBox" placeholder="Search suppliers, component, evidence..." />
-          <select id="categoryFilter">
+          <input id="searchInput" placeholder="Search suppliers, category, evidence..." />
+          <select id="statusFilter">
             <option value="all">All</option>
-            <option value="currently_supplying_europe">Currently supplying in Europe</option>
-            <option value="followed_oem_to_europe">Followed OEM to Europe</option>
-            <option value="planned_localization">Active Europe localization plans</option>
-            <option value="european_supplier">European-based supplier</option>
-            <option value="watchlist">Watchlist</option>
+            <option value="accepted">Accepted</option>
+            <option value="pending">Pending</option>
           </select>
         </div>
-        <div id="results"></div>
+
+        <div id="findings"></div>
       </section>
     </section>
 
-    <section class="card">
+    <section class="panel">
       <h2>Manual import fallback</h2>
-      <p>If direct browser research returns malformed JSON, click <strong>Copy research prompt</strong>, run it in ChatGPT/OpenAI, paste the JSON here, then import.</p>
-      <textarea id="manualJson" rows="8" placeholder='{"findings":[...]}'></textarea>
-      <button id="importJsonBtn">Import JSON</button>
+      <p class="muted">If the browser blocks direct OpenAI calls, copy the generated prompt, run it in ChatGPT/OpenAI manually, paste the JSON result here, and click Import.</p>
+      <div class="row">
+        <button id="copyPromptBtn" class="secondary">Copy research prompt</button>
+        <button id="importJsonBtn" class="secondary">Import pasted JSON</button>
+      </div>
+      <textarea id="manualJson" placeholder='Paste JSON result here, e.g. {"findings":[...]}'></textarea>
     </section>
   </main>
-  <script src="app.js"></script>
+  <script src="./app.js"></script>
 </body>
 </html>

@@ -1,7 +1,11 @@
 {
-  "version": 2,
-  "buildCommand": "echo no-build",
-  "installCommand": "echo no-install",
-  "outputDirectory": ".",
-  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
+  "cleanUrls": true,
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-store" }
+      ]
+    }
+  ]
 }
