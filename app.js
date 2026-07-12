@@ -1,267 +1,266 @@
-const DEFAULT_OEMS = [
-  { id: 'byd', name: 'BYD', country: 'China', logo: 'https://www.google.com/s2/favicons?sz=64&domain=byd.com' },
-  { id: 'leapmotor', name: 'Leapmotor', country: 'China', logo: 'https://www.google.com/s2/favicons?sz=64&domain=leapmotor.com' },
-  { id: 'gac', name: 'GAC / Aion', country: 'China', logo: 'https://www.google.com/s2/favicons?sz=64&domain=gac.com.cn' },
-  { id: 'xpeng', name: 'XPeng', country: 'China', logo: 'https://www.google.com/s2/favicons?sz=64&domain=xpeng.com' },
-  { id: 'geely', name: 'Geely', country: 'China', logo: 'https://www.google.com/s2/favicons?sz=64&domain=geely.com' }
-];
+const OEMS = ['BYD', 'Leapmotor', 'GAC/Aion', 'XPeng', 'Geely'];
+let selectedOEM = OEMS[0];
+let findings = JSON.parse(localStorage.getItem('findings') || '[]');
 
-let state = loadState();
-let selectedOemId = state.oems[0]?.id || null;
+const oemsEl = document.getElementById('oems');
+const resultsEl = document.getElementById('results');
+const statusEl = document.getElementById('status');
+const apiKeyEl = document.getElementById('apiKey');
+const manualJsonEl = document.getElementById('manualJson');
 
-const el = (id) => document.getElementById(id);
+apiKeyEl.value = localStorage.getItem('openai_api_key') || '';
+apiKeyEl.addEventListener('input', () => localStorage.setItem('openai_api_key', apiKeyEl.value.trim()));
 
-function loadState() {
-  const saved = localStorage.getItem('oemSupplierResearchState');
-  if (saved) {
-    try { return JSON.parse(saved); } catch (_) {}
-  }
-  return { oems: DEFAULT_OEMS, findings: [] };
-}
-function saveState() { localStorage.setItem('oemSupplierResearchState', JSON.stringify(state)); }
-function setStatus(message, isError=false) {
-  const box = el('statusBox');
-  box.hidden = false;
-  box.textContent = message;
-  box.style.borderColor = isError ? '#111' : '#d8d8d8';
-}
-function clearStatus() { el('statusBox').hidden = true; el('statusBox').textContent = ''; }
-
-function renderOems() {
-  const list = el('oemList');
-  list.innerHTML = '';
-  state.oems.forEach(oem => {
-    const card = document.createElement('div');
-    card.className = 'oem-card' + (oem.id === selectedOemId ? ' active' : '');
-    card.innerHTML = `<img class="oem-logo" src="${oem.logo || ''}" alt="" onerror="this.style.display='none'"/><div><strong>${escapeHtml(oem.name)}</strong><div class="muted">${escapeHtml(oem.country || '')}</div></div>`;
-    card.onclick = () => { selectedOemId = oem.id; render(); };
-    list.appendChild(card);
+function renderOEMs() {
+  oemsEl.innerHTML = '';
+  OEMS.forEach(oem => {
+    const btn = document.createElement('button');
+    btn.textContent = oem;
+    btn.className = oem === selectedOEM ? 'active' : 'secondary';
+    btn.onclick = () => { selectedOEM = oem; renderOEMs(); renderResults(); };
+    oemsEl.appendChild(btn);
   });
 }
 
-function renderFindings() {
-  const oem = state.oems.find(x => x.id === selectedOemId);
-  el('selectedOemTitle').textContent = oem ? oem.name : 'Select an OEM';
-  el('selectedOemSubtitle').textContent = oem ? 'Supplier intelligence for this OEM only' : '';
+function researchPrompt(oem) {
+  return `You are an automotive supplier intelligence analyst. Research ONLY ${oem} in Europe.
 
-  const search = el('searchInput').value.trim().toLowerCase();
-  const statusFilter = el('statusFilter').value;
-  let findings = state.findings.filter(f => f.oem_id === selectedOemId);
-  if (statusFilter !== 'all') findings = findings.filter(f => (f.review_status || 'pending') === statusFilter);
-  if (search) {
-    findings = findings.filter(f => JSON.stringify(f).toLowerCase().includes(search));
-  }
+Find suppliers in these buckets:
+1. Chinese suppliers currently supplying ${oem} in Europe.
+2. Chinese suppliers that followed / came with ${oem} to Europe.
+3. Chinese suppliers with active plans to localize production in Europe connected to ${oem}, or relevant to ${oem} where the exact link is not verified.
+4. European-based suppliers supplying ${oem} or Chinese OEMs in Europe.
+5. Watchlist suppliers where the OEM relationship is not verified yet.
 
-  const container = el('findings');
-  container.innerHTML = '';
-  if (!findings.length) {
-    container.innerHTML = '<div class="empty">No findings yet for this OEM. Click Research selected OEM.</div>';
-    return;
-  }
+Rules:
+- Do not include findings for another OEM unless the finding clearly says it is relevant to ${oem}.
+- If the source does not prove a supplier-OEM relationship, set status to localization_only or watchlist.
+- Prefer 8 to 20 useful findings if evidence exists.
+- Every finding must include at least one source URL.
+- Return ONLY valid JSON. No markdown. No comments. No trailing commas.
 
-  const grouped = groupBy(findings, f => f.category || 'uncategorized');
-  Object.keys(grouped).sort().forEach(category => {
-    const h = document.createElement('h3');
-    h.className = 'category';
-    h.textContent = labelCategory(category);
-    container.appendChild(h);
-    grouped[category].forEach(f => container.appendChild(renderFindingCard(f)));
-  });
-}
-
-function renderFindingCard(f) {
-  const card = document.createElement('div');
-  card.className = 'finding';
-  const evidence = Array.isArray(f.evidence) ? f.evidence : [];
-  const badges = [f.relationship_status, `confidence ${f.confidence ?? 'n/a'}`, f.review_status || 'pending'].filter(Boolean);
-  card.innerHTML = `
-    <div class="finding-head">
-      <div>
-        <div class="supplier-name">${escapeHtml(f.supplier || 'Unknown supplier')}</div>
-        <div>${badges.map(b => `<span class="badge">${escapeHtml(String(b))}</span>`).join('')}</div>
-      </div>
-      <button class="${f.review_status === 'accepted' ? 'secondary' : ''}" data-action="toggle">${f.review_status === 'accepted' ? 'Unaccept' : 'Accept'}</button>
-    </div>
-    <p style="margin-top:10px">${escapeHtml(f.claim || '')}</p>
-    <p class="muted">${escapeHtml(f.reasoning_summary || '')}</p>
-    <div class="evidence"><strong>Evidence</strong><br>${evidence.length ? evidence.map(ev => evidenceLine(ev)).join('') : '<span class="muted">No evidence supplied.</span>'}</div>
-  `;
-  card.querySelector('[data-action="toggle"]').onclick = () => {
-    f.review_status = f.review_status === 'accepted' ? 'pending' : 'accepted';
-    saveState(); render();
-  };
-  return card;
-}
-function evidenceLine(ev) {
-  const title = escapeHtml(ev.title || ev.source || 'source');
-  const url = ev.url ? String(ev.url) : '';
-  const quote = ev.relevant_quote ? ` — “${escapeHtml(ev.relevant_quote)}”` : '';
-  if (url) return `<div><a href="${escapeAttr(url)}" target="_blank" rel="noreferrer">${title}</a>${quote}</div>`;
-  return `<div>${title}${quote}</div>`;
-}
-
-function buildPrompt(oem) {
-  return `You are an automotive supplier intelligence analyst. Research ${oem.name} and produce a practical supplier intelligence list for Europe.
-
-Task: identify suppliers relevant to ${oem.name} in Europe, grouped into these exact categories:
-1. chinese_suppliers_currently_supplying_oem_in_europe
-2. chinese_suppliers_that_followed_oem_to_europe
-3. chinese_suppliers_with_active_europe_localization_plans
-4. european_based_suppliers_supplying_chinese_oem_in_europe
-5. watchlist_unverified_but_relevant_suppliers
-
-Important rules:
-- The findings must be about ${oem.name}. Do not include suppliers only related to another OEM unless there is also a ${oem.name} relevance.
-- Include as many useful suppliers as you can find, not just one.
-- Mark relationship_status as confirmed, probable, localization_only, watchlist, or weak.
-- Use cautious language. Do not invent direct supplier relationships.
-- Each finding needs supplier, category, relationship_status, confidence 0-100, claim, reasoning_summary, and evidence.
-- Evidence should include title, url, source_type, date if known, and a short relevant_quote.
-- Return ONLY valid JSON. No markdown.
-
-JSON schema:
+JSON shape exactly:
 {
-  "oem": "${oem.name}",
   "findings": [
     {
+      "oem": "${oem}",
       "supplier": "",
-      "category": "chinese_suppliers_currently_supplying_oem_in_europe | chinese_suppliers_that_followed_oem_to_europe | chinese_suppliers_with_active_europe_localization_plans | european_based_suppliers_supplying_chinese_oem_in_europe | watchlist_unverified_but_relevant_suppliers",
-      "relationship_status": "confirmed | probable | localization_only | watchlist | weak",
-      "confidence": 0,
+      "supplier_origin": "China or Europe or Other",
+      "category": "currently_supplying_europe or followed_oem_to_europe or planned_localization or european_supplier or watchlist",
+      "status": "confirmed or probable or localization_only or european_supplier or watchlist",
+      "component": "",
+      "europe_location": "",
       "claim": "",
-      "reasoning_summary": "",
-      "evidence": [{"title":"", "url":"", "source_type":"official | news | filing | government | job_posting | unknown", "date":"", "relevant_quote":""}]
+      "confidence": 0,
+      "sources": [
+        { "title": "", "url": "", "short_evidence": "" }
+      ]
     }
   ]
 }`;
 }
 
-async function researchSelectedOem() {
-  const oem = state.oems.find(x => x.id === selectedOemId);
-  if (!oem) return;
-  const key = el('apiKey').value.trim();
-  if (!key) { setStatus('Enter your OpenAI API key first.', true); return; }
-  if (el('rememberKey').checked) localStorage.setItem('openaiApiKey', key);
+async function runResearch() {
+  const key = apiKeyEl.value.trim();
+  if (!key) { showStatus('Add your OpenAI API key first.', true); return; }
+  showStatus(`Researching ${selectedOEM}. This can take a little while...`, false);
 
-  const prompt = buildPrompt(oem);
-  setStatus(`Researching ${oem.name}. This can take 1–4 minutes...`);
-  el('researchBtn').disabled = true;
   try {
-    const response = await fetch('https://api.openai.com/v1/responses', {
+    const res = await fetch('https://api.openai.com/v1/responses', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
       body: JSON.stringify({
         model: 'gpt-4.1-mini',
-        input: prompt,
+        input: researchPrompt(selectedOEM),
         tools: [{ type: 'web_search_preview' }],
-        temperature: 0.2
+        text: { format: { type: 'json_object' } }
       })
     });
-    const raw = await response.text();
-    if (!response.ok) throw new Error(raw);
-    const data = JSON.parse(raw);
-    const text = extractOutputText(data);
-    const parsed = parseJsonText(text);
-    importFindingsForOem(oem, parsed);
-    setStatus(`Research complete. Imported ${parsed.findings?.length || 0} findings for ${oem.name}.`);
+
+    const raw = await res.text();
+    let data;
+    try { data = JSON.parse(raw); } catch { throw new Error(raw.slice(0, 600)); }
+    if (!res.ok) throw new Error(data.error?.message || JSON.stringify(data).slice(0, 600));
+
+    const text = getOutputText(data);
+    const parsed = parseResearchJson(text);
+    saveFindings(parsed.findings || []);
   } catch (err) {
-    console.error(err);
-    setStatus(`Research failed. This may be browser/CORS, API, or model access. Use the manual import fallback below.\n\n${err.message || err}`, true);
-  } finally {
-    el('researchBtn').disabled = false;
+    showStatus(`Research failed: ${escapeHtml(err.message)}<br><br>Use the manual fallback: click “Copy research prompt”, run it in ChatGPT/OpenAI, paste the JSON below, then click Import JSON.`, true);
   }
 }
-function extractOutputText(data) {
+
+function getOutputText(data) {
   if (data.output_text) return data.output_text;
   const parts = [];
   for (const item of data.output || []) {
     for (const c of item.content || []) {
       if (c.text) parts.push(c.text);
+      if (c.type === 'output_text' && c.text) parts.push(c.text);
     }
   }
-  return parts.join('\n');
-}
-function parseJsonText(text) {
-  const clean = text.trim().replace(/^```json/i, '').replace(/^```/, '').replace(/```$/,'').trim();
-  try { return JSON.parse(clean); } catch (_) {}
-  const start = clean.indexOf('{');
-  const end = clean.lastIndexOf('}');
-  if (start >= 0 && end > start) return JSON.parse(clean.slice(start, end + 1));
-  throw new Error('Could not parse AI JSON output. Paste it into manual import and check formatting.');
-}
-function importFindingsForOem(oem, parsed) {
-  const findings = Array.isArray(parsed.findings) ? parsed.findings : [];
-  const now = new Date().toISOString();
-  const normalized = findings.map((f, idx) => ({
-    id: `${oem.id}-${Date.now()}-${idx}-${Math.random().toString(36).slice(2)}`,
-    oem_id: oem.id,
-    oem_name: oem.name,
-    supplier: f.supplier || 'Unknown supplier',
-    category: f.category || 'watchlist_unverified_but_relevant_suppliers',
-    relationship_status: f.relationship_status || 'watchlist',
-    confidence: Number(f.confidence || 0),
-    claim: f.claim || '',
-    reasoning_summary: f.reasoning_summary || '',
-    evidence: Array.isArray(f.evidence) ? f.evidence : [],
-    review_status: 'pending',
-    created_at: now
-  }));
-  state.findings = [...normalized, ...state.findings.filter(f => !(f.oem_id === oem.id && f.review_status !== 'accepted'))];
-  saveState(); render();
+  return parts.join('\n').trim();
 }
 
-function exportCsv(acceptedOnly=false) {
-  const rows = (acceptedOnly ? state.findings.filter(f => f.review_status === 'accepted') : state.findings);
-  const header = ['OEM','Supplier','Category','Status','Confidence','Review','Claim','Reasoning','Evidence URLs'];
-  const lines = [header, ...rows.map(f => [
-    f.oem_name, f.supplier, f.category, f.relationship_status, f.confidence, f.review_status, f.claim, f.reasoning_summary,
-    (f.evidence || []).map(e => e.url).filter(Boolean).join(' | ')
-  ])].map(row => row.map(csvCell).join(','));
-  download(`oem_supplier_findings${acceptedOnly ? '_accepted' : ''}.csv`, lines.join('\n'), 'text/csv');
-}
-function exportJson() { download('oem_supplier_findings.json', JSON.stringify(state, null, 2), 'application/json'); }
-function exportHtml() {
-  const rows = state.findings.filter(f => f.review_status === 'accepted');
-  const html = `<!doctype html><html><head><meta charset="utf-8"><title>OEM Supplier Report</title><style>body{font-family:Arial;padding:24px}table{border-collapse:collapse;width:100%}td,th{border:1px solid #ccc;padding:8px;text-align:left;vertical-align:top}</style></head><body><h1>OEM Supplier Report</h1><p>Generated ${new Date().toLocaleString()}</p><table><thead><tr><th>OEM</th><th>Supplier</th><th>Category</th><th>Status</th><th>Confidence</th><th>Claim</th></tr></thead><tbody>${rows.map(f => `<tr><td>${escapeHtml(f.oem_name)}</td><td>${escapeHtml(f.supplier)}</td><td>${escapeHtml(labelCategory(f.category))}</td><td>${escapeHtml(f.relationship_status)}</td><td>${escapeHtml(String(f.confidence))}</td><td>${escapeHtml(f.claim)}</td></tr>`).join('')}</tbody></table></body></html>`;
-  download('oem_supplier_report.html', html, 'text/html');
-}
-function download(filename, text, type) {
-  const blob = new Blob([text], {type});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
-  URL.revokeObjectURL(url);
-}
-function csvCell(v) { return `"${String(v ?? '').replace(/"/g, '""')}"`; }
-function groupBy(arr, fn) { return arr.reduce((acc, item) => { const k = fn(item); (acc[k] ||= []).push(item); return acc; }, {}); }
-function labelCategory(c) { return String(c || '').replaceAll('_',' ').replace(/\b\w/g, m => m.toUpperCase()); }
-function escapeHtml(s) { return String(s ?? '').replace(/[&<>"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[ch])); }
-function escapeAttr(s) { return escapeHtml(s).replace(/'/g, '&#39;'); }
-function render() { renderOems(); renderFindings(); }
+function parseResearchJson(text) {
+  if (!text) throw new Error('OpenAI returned no text.');
+  let cleaned = text.trim()
+    .replace(/^```json\s*/i, '')
+    .replace(/^```\s*/i, '')
+    .replace(/```$/i, '')
+    .trim();
 
-el('researchBtn').onclick = researchSelectedOem;
-el('exportCsvBtn').onclick = () => exportCsv(false);
-el('exportJsonBtn').onclick = exportJson;
-el('exportHtmlBtn').onclick = exportHtml;
-el('searchInput').oninput = renderFindings;
-el('statusFilter').onchange = renderFindings;
-el('addOemBtn').onclick = () => {
-  const name = el('newOemName').value.trim(); if (!name) return;
-  const country = el('newOemCountry').value.trim() || 'China';
-  const id = name.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
-  state.oems.push({ id, name, country, logo: `https://www.google.com/s2/favicons?sz=64&domain=${encodeURIComponent(name.toLowerCase().replace(/\s+/g,''))}.com` });
-  selectedOemId = id; el('newOemName').value=''; el('newOemCountry').value=''; saveState(); render();
-};
-el('clearKeyBtn').onclick = () => { localStorage.removeItem('openaiApiKey'); el('apiKey').value=''; el('rememberKey').checked=false; };
-el('copyPromptBtn').onclick = async () => {
-  const oem = state.oems.find(x => x.id === selectedOemId); if (!oem) return;
-  await navigator.clipboard.writeText(buildPrompt(oem)); setStatus('Research prompt copied.');
-};
-el('importJsonBtn').onclick = () => {
-  const oem = state.oems.find(x => x.id === selectedOemId); if (!oem) return;
-  try { const parsed = parseJsonText(el('manualJson').value); importFindingsForOem(oem, parsed); setStatus('Imported pasted JSON.'); }
-  catch (e) { setStatus(e.message, true); }
-};
+  const direct = tryJson(cleaned);
+  if (direct) return normalizeParsed(direct);
 
-const savedKey = localStorage.getItem('openaiApiKey');
-if (savedKey) { el('apiKey').value = savedKey; el('rememberKey').checked = true; }
-render();
+  const extracted = extractJsonBlock(cleaned);
+  const extractedParsed = tryJson(extracted);
+  if (extractedParsed) return normalizeParsed(extractedParsed);
+
+  const repaired = basicJsonRepair(extracted || cleaned);
+  const repairedParsed = tryJson(repaired);
+  if (repairedParsed) return normalizeParsed(repairedParsed);
+
+  manualJsonEl.value = cleaned;
+  throw new Error('The AI returned malformed JSON. I pasted it into the manual import box so you can inspect or repair it.');
+}
+
+function tryJson(s) { try { return JSON.parse(s); } catch { return null; } }
+
+function extractJsonBlock(s) {
+  const firstObj = s.indexOf('{');
+  const firstArr = s.indexOf('[');
+  let start = -1;
+  if (firstObj >= 0 && firstArr >= 0) start = Math.min(firstObj, firstArr);
+  else start = Math.max(firstObj, firstArr);
+  if (start < 0) return '';
+  const open = s[start];
+  const close = open === '{' ? '}' : ']';
+  let depth = 0, inString = false, esc = false;
+  for (let i = start; i < s.length; i++) {
+    const ch = s[i];
+    if (esc) { esc = false; continue; }
+    if (ch === '\\') { esc = true; continue; }
+    if (ch === '"') { inString = !inString; continue; }
+    if (inString) continue;
+    if (ch === open) depth++;
+    if (ch === close) depth--;
+    if (depth === 0) return s.slice(start, i + 1);
+  }
+  return s.slice(start);
+}
+
+function basicJsonRepair(s) {
+  return s
+    .replace(/,\s*([}\]])/g, '$1')
+    .replace(/[“”]/g, '"')
+    .replace(/[‘’]/g, "'")
+    .trim();
+}
+
+function normalizeParsed(parsed) {
+  if (Array.isArray(parsed)) return { findings: parsed };
+  if (parsed.findings && Array.isArray(parsed.findings)) return parsed;
+  if (parsed.results && Array.isArray(parsed.results)) return { findings: parsed.results };
+  return { findings: [] };
+}
+
+function importManualJson() {
+  try {
+    const parsed = parseResearchJson(manualJsonEl.value);
+    saveFindings(parsed.findings || []);
+  } catch (err) {
+    showStatus(`Import failed: ${escapeHtml(err.message)}`, true);
+  }
+}
+
+function saveFindings(rawFindings) {
+  const cleaned = rawFindings
+    .filter(f => String(f.oem || '').toLowerCase().includes(selectedOEM.toLowerCase().split('/')[0]) || !f.oem || String(f.oem).trim() === selectedOEM)
+    .map(f => ({
+      id: crypto.randomUUID(),
+      accepted: true,
+      created_at: new Date().toISOString(),
+      oem: selectedOEM,
+      supplier: f.supplier || '',
+      supplier_origin: f.supplier_origin || '',
+      category: f.category || 'watchlist',
+      status: f.status || 'watchlist',
+      component: f.component || '',
+      europe_location: f.europe_location || '',
+      claim: f.claim || '',
+      confidence: Number(f.confidence || 0),
+      sources: Array.isArray(f.sources) ? f.sources : []
+    }))
+    .filter(f => f.supplier && f.claim);
+
+  findings = [...findings.filter(f => f.oem !== selectedOEM), ...cleaned];
+  localStorage.setItem('findings', JSON.stringify(findings));
+  showStatus(`Added ${cleaned.length} findings for ${selectedOEM}.`, false);
+  renderResults();
+}
+
+function renderResults() {
+  const q = (document.getElementById('searchBox')?.value || '').toLowerCase();
+  const cat = document.getElementById('categoryFilter')?.value || 'all';
+  let data = findings.filter(f => f.oem === selectedOEM);
+  if (cat !== 'all') data = data.filter(f => f.category === cat || f.status === cat);
+  if (q) data = data.filter(f => JSON.stringify(f).toLowerCase().includes(q));
+
+  if (!data.length) { resultsEl.innerHTML = '<p>No findings yet for this OEM. Click Research selected OEM or import JSON.</p>'; return; }
+  resultsEl.innerHTML = data.map(f => `
+    <div class="finding">
+      <h3>${escapeHtml(f.supplier || 'Unknown supplier')}</h3>
+      <div class="meta">${escapeHtml(f.category || '')} · ${escapeHtml(f.status || '')} · Confidence: ${escapeHtml(String(f.confidence ?? ''))}</div>
+      <div><strong>Origin:</strong> ${escapeHtml(f.supplier_origin || '')}</div>
+      <div><strong>Component:</strong> ${escapeHtml(f.component || '')}</div>
+      <div><strong>Europe location:</strong> ${escapeHtml(f.europe_location || '')}</div>
+      <p>${escapeHtml(f.claim || '')}</p>
+      <div class="sources"><strong>Sources:</strong><br>${(f.sources || []).map(s => `${escapeHtml(s.title || 'Source')} ${s.url ? `— <a href="${escapeAttr(s.url)}" target="_blank">link</a>` : ''}<br><em>${escapeHtml(s.short_evidence || '')}</em>`).join('<br>')}</div>
+    </div>
+  `).join('');
+}
+
+function showStatus(msg, isError) { statusEl.innerHTML = msg; statusEl.className = isError ? 'error' : 'ok'; }
+function escapeHtml(s) { return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function escapeAttr(s) { return String(s).replace(/"/g, '&quot;'); }
+
+function download(name, content, type) {
+  const blob = new Blob([content], { type });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = name; a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function exportCsv() {
+  const rows = findings.filter(f => f.oem === selectedOEM);
+  const header = ['OEM','Supplier','Origin','Category','Status','Component','Europe Location','Confidence','Claim','Sources'];
+  const csv = [header, ...rows.map(f => [f.oem, f.supplier, f.supplier_origin, f.category, f.status, f.component, f.europe_location, f.confidence, f.claim, (f.sources||[]).map(s => s.url).join(' | ')])]
+    .map(r => r.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
+  download(`${selectedOEM.replace(/\W+/g,'_')}_suppliers.csv`, csv, 'text/csv');
+}
+function exportJson() { download(`${selectedOEM.replace(/\W+/g,'_')}_suppliers.json`, JSON.stringify(findings.filter(f => f.oem === selectedOEM), null, 2), 'application/json'); }
+function exportHtml() { download(`${selectedOEM.replace(/\W+/g,'_')}_report.html`, `<!doctype html><html><body><h1>${selectedOEM} Supplier Report</h1>${resultsEl.innerHTML}</body></html>`, 'text/html'); }
+
+function copyPrompt() { navigator.clipboard.writeText(researchPrompt(selectedOEM)); showStatus('Research prompt copied.', false); }
+function clearFindings() { findings = findings.filter(f => f.oem !== selectedOEM); localStorage.setItem('findings', JSON.stringify(findings)); renderResults(); showStatus(`Cleared ${selectedOEM} findings.`, false); }
+
+function addOem() {
+  const name = document.getElementById('newOemName').value.trim();
+  if (!name) return;
+  if (!OEMS.includes(name)) OEMS.push(name);
+  selectedOEM = name;
+  renderOEMs(); renderResults();
+}
+
+document.getElementById('researchBtn').onclick = runResearch;
+document.getElementById('copyPromptBtn').onclick = copyPrompt;
+document.getElementById('importJsonBtn').onclick = importManualJson;
+document.getElementById('exportCsvBtn').onclick = exportCsv;
+document.getElementById('exportJsonBtn').onclick = exportJson;
+document.getElementById('exportHtmlBtn').onclick = exportHtml;
+document.getElementById('clearBtn').onclick = clearFindings;
+document.getElementById('addOemBtn').onclick = addOem;
+document.getElementById('searchBox').oninput = renderResults;
+document.getElementById('categoryFilter').onchange = renderResults;
+renderOEMs(); renderResults();
