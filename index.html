@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OEM Supplier Research</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <main class="page">
+    <header class="topbar">
+      <div>
+        <h1>OEM Supplier Research</h1>
+        <p>Simple AI research dashboard for Chinese OEM supplier intelligence in Europe.</p>
+      </div>
+      <div class="actions">
+        <button id="exportCsvBtn">Export CSV</button>
+        <button id="exportJsonBtn">Export JSON</button>
+        <button id="exportHtmlBtn">Export HTML</button>
+      </div>
+    </header>
+
+    <section class="panel">
+      <label for="apiKey">OpenAI API key</label>
+      <input id="apiKey" type="password" placeholder="sk-..." autocomplete="off" />
+      <div class="row small-row">
+        <label><input id="rememberKey" type="checkbox" /> Remember in this browser</label>
+        <button id="clearKeyBtn" class="secondary">Clear key</button>
+      </div>
+      <p class="hint">This version has no backend. Your key is used only in your browser. Do not share a public deployment with a saved key.</p>
+    </section>
+
+    <section class="layout">
+      <aside class="panel sidebar">
+        <h2>OEMs</h2>
+        <div id="oemList" class="oem-list"></div>
+        <hr />
+        <h3>Add OEM</h3>
+        <input id="newOemName" placeholder="OEM name" />
+        <input id="newOemCountry" placeholder="Country / group" />
+        <button id="addOemBtn">Add OEM</button>
+      </aside>
+
+      <section class="panel main-panel">
+        <div class="section-head">
+          <div>
+            <h2 id="selectedOemTitle">Select an OEM</h2>
+            <p id="selectedOemSubtitle" class="muted"></p>
+          </div>
+          <button id="researchBtn">Research selected OEM</button>
+        </div>
+
+        <div id="statusBox" class="status" hidden></div>
+
+        <div class="toolbar">
+          <input id="searchInput" placeholder="Search suppliers, category, evidence..." />
+          <select id="statusFilter">
+            <option value="all">All</option>
+            <option value="accepted">Accepted</option>
+            <option value="pending">Pending</option>
+          </select>
+        </div>
+
+        <div id="findings"></div>
+      </section>
+    </section>
+
+    <section class="panel">
+      <h2>Manual import fallback</h2>
+      <p class="muted">If the browser blocks direct OpenAI calls, copy the generated prompt, run it in ChatGPT/OpenAI manually, paste the JSON result here, and click Import.</p>
+      <div class="row">
+        <button id="copyPromptBtn" class="secondary">Copy research prompt</button>
+        <button id="importJsonBtn" class="secondary">Import pasted JSON</button>
+      </div>
+      <textarea id="manualJson" placeholder='Paste JSON result here, e.g. {"findings":[...]}'></textarea>
+    </section>
+  </main>
+  <script src="./app.js"></script>
+</body>
+</html>
