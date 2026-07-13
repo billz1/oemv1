@@ -10,8 +10,8 @@
   <main class="page">
     <header class="topbar">
       <div>
-        <h1>OEM Supplier Research</h1>
-        <p>Simple AI research dashboard for Chinese OEM supplier intelligence in Europe.</p>
+        <h1>OEM supplier intelligence</h1>
+        <p></p>
       </div>
       <div class="actions">
         <button id="exportCsvBtn">Export CSV</button>
@@ -21,13 +21,13 @@
     </header>
 
     <section class="panel">
-      <label for="apiKey">OpenAI API key</label>
+      <label for="apiKey">API key</label>
       <input id="apiKey" type="password" placeholder="sk-..." autocomplete="off" />
       <div class="row small-row">
         <label><input id="rememberKey" type="checkbox" /> Remember in this browser</label>
         <button id="clearKeyBtn" class="secondary">Clear key</button>
       </div>
-      <p class="hint">This version has no backend. Your key is used only in your browser. Do not share a public deployment with a saved key.</p>
+      <p class="hint"></p>
     </section>
 
     <section class="layout">
@@ -65,15 +65,7 @@
       </section>
     </section>
 
-    <section class="panel">
-      <h2>Manual import fallback</h2>
-      <p class="muted">If the browser blocks direct OpenAI calls, copy the generated prompt, run it in ChatGPT/OpenAI manually, paste the JSON result here, and click Import.</p>
-      <div class="row">
-        <button id="copyPromptBtn" class="secondary">Copy research prompt</button>
-        <button id="importJsonBtn" class="secondary">Import pasted JSON</button>
-      </div>
-      <textarea id="manualJson" placeholder='Paste JSON result here, e.g. {"findings":[...]}'></textarea>
-    </section>
+
   </main>
   <script src="./app.js"></script>
 </body>
